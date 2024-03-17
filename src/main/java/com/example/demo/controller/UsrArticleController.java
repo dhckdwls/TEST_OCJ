@@ -11,11 +11,16 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import com.example.demo.service.ArticleService;
 import com.example.demo.util.Ut;
 import com.example.demo.vo.Article;
+import com.example.demo.vo.ResultData;
+import com.example.demo.vo.Rq;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 @Controller
 public class UsrArticleController {
+
+	@Autowired
+	private Rq rq;
 
 	@Autowired
 	private ArticleService articleService;
@@ -25,95 +30,112 @@ public class UsrArticleController {
 	}
 
 	// 액션 메서드
-	//글쓰기
-	@RequestMapping("/usr/article/write")
-	public String Write() {
 
-		return "/usr/article/write";
+	@RequestMapping("/usr/article/detail")
+	public String showDetail(HttpServletRequest req, Model model, int id) {
+		Rq rq = (Rq) req.getAttribute("rq");
+
+		Article article = articleService.getForPrintArticle(rq.getLoginedMemberId(), id);
+
+		model.addAttribute("article", article);
+
+		return "usr/article/detail";
 	}
-	
-	
-	@RequestMapping("/usr/article/doWrite")
-	@ResponseBody
-	public String doWrite(String title, String body) {
-		int id = articleService.writeArticle(title, body);
 
-		Article article = articleService.getArticle(id);
-
-		return Ut.jsReplace("S-1", id + "번글생성", "../article/detail?id=" + id);
-	}
-	
-	
-	//리스트
 	@RequestMapping("/usr/article/list")
 	public String showList(Model model) {
 		List<Article> articles = articleService.getArticles();
-		model.addAttribute("articles",articles);
-		
-		return "/usr/article/list";
+
+		model.addAttribute("articles", articles);
+
+		return "usr/article/list";
 	}
-	
-	//디테일
-	@RequestMapping("/usr/article/detail")
-	public String showDetail(Model model,int id) {
+
+	@RequestMapping("/usr/article/write")
+	public String showJoin(HttpServletRequest req) {
+
+		return "usr/article/write";
+	}
+
+	@RequestMapping("/usr/article/doWrite")
+	@ResponseBody
+	public String doWrite(HttpServletRequest req, String title, String body) {
+
+		Rq rq = (Rq) req.getAttribute("rq");
+
+		if (Ut.isNullOrEmpty(title)) {
+			return Ut.jsHistoryBack("F-1", "제목을 입력해주세요");
+		}
+		if (Ut.isNullOrEmpty(body)) {
+			return Ut.jsHistoryBack("F-2", "내용을 입력해주세요");
+		}
+
+		ResultData<Integer> writeArticleRd = articleService.writeArticle(rq.getLoginedMemberId(), title, body);
+
+		int id = (int) writeArticleRd.getData1();
+
 		Article article = articleService.getArticle(id);
 
-		if (article == null) {
-			return Ut.jsHistoryBack("F-1", id + "번 글 없음");
-		}
-		
-		model.addAttribute("article", article);
-		
-		return "usr/article/detail";
+		return Ut.jsReplace(writeArticleRd.getResultCode(), writeArticleRd.getMsg(), "../article/detail?id=" + id);
 
-		
 	}
-	//수정
+
 	@RequestMapping("/usr/article/modify")
 	public String showModify(HttpServletRequest req, Model model, int id) {
+		Rq rq = (Rq) req.getAttribute("rq");
 
-		Article article = articleService.getArticle(id);
+		Article article = articleService.getForPrintArticle(rq.getLoginedMemberId(), id);
 
 		if (article == null) {
-			return Ut.jsReplace("F-1",id+"번글은 없음", "/");
+			return Ut.jsHistoryBack("F-1", Ut.f("%d번 글은 존재하지 않습니다", id));
 		}
 
 		model.addAttribute("article", article);
 
 		return "usr/article/modify";
 	}
-	
+
 	@RequestMapping("/usr/article/doModify")
 	@ResponseBody
-	public Object doModify(int id, String title, String body) {
+	public String doModify(HttpServletRequest req, int id, String title, String body) {
+		Rq rq = (Rq) req.getAttribute("rq");
+
 		Article article = articleService.getArticle(id);
 
 		if (article == null) {
 			return Ut.jsHistoryBack("F-1", Ut.f("%d번 글은 존재하지 않습니다", id));
 		}
 
-		articleService.modifyArticle(id, title, body);
+		ResultData loginedMemberCanModifyRd = articleService.userCanModify(rq.getLoginedMemberId(), article);
 
-		return Ut.jsReplace("S-1", id+"번글수정완료", "../article/detail?id=" + id);
+		if (loginedMemberCanModifyRd.isSuccess()) {
+			articleService.modifyArticle(id, title, body);
+		}
+
+		return Ut.jsReplace(loginedMemberCanModifyRd.getResultCode(), loginedMemberCanModifyRd.getMsg(),
+				"../article/detail?id=" + id);
 	}
-	
-	//삭제
+
+	// 로그인 체크 -> 유무 체크 -> 권한 체크 -> 삭제
 	@RequestMapping("/usr/article/doDelete")
 	@ResponseBody
-	public String doDelete(int id) {
+	public String doDelete(HttpServletRequest req, int id) {
+		Rq rq = (Rq) req.getAttribute("rq");
 
 		Article article = articleService.getArticle(id);
 
 		if (article == null) {
-			return Ut.jsHistoryBack("F-1", id + "번글 없음");
+			return Ut.jsHistoryBack("F-1", Ut.f("%d번 글은 존재하지 않습니다", id));
 		}
 
-		articleService.deleteArticle(id);
+		ResultData loginedMemberCanDeleteRd = articleService.userCanDelete(rq.getLoginedMemberId(), article);
 
-		return Ut.jsReplace("S-1", "삭제완료", "/usr/article/list");
+		if (loginedMemberCanDeleteRd.isSuccess()) {
+			articleService.deleteArticle(id);
+		}
+
+		return Ut.jsReplace(loginedMemberCanDeleteRd.getResultCode(), loginedMemberCanDeleteRd.getMsg(),
+				"../article/list");
 	}
 
-	
-
-	
 }

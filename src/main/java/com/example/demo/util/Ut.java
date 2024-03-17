@@ -52,17 +52,7 @@ public class Ut {
 				</script>
 				""", resultMsg);
 	}
-	
-	public static String Replace(String replaceUri) {
 
-	    return Ut.f("""
-	            <script>
-	                location.replace('%s');
-	            </script>
-	            """, replaceUri);
-	}
-	
-	
 	public static String jsReplace(String resultCode, String msg, String replaceUri) {
 		if (resultCode == null) {
 			resultCode = "";
